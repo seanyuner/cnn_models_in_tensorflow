@@ -281,7 +281,7 @@ class Vgg19(CNNs):
 # 定义GoogLeNet模型
 class GoogLeNet(CNNs):
     def __init__(self, x, num_classes, keep_prob, regularizer=None,
-                 write_sum=False, auxil=False):
+                 write_sum=False, auxil=None):
         super().__init__(keep_prob, regularizer, write_sum)
         self.x = x
         self.NUM_CLASSES = num_classes
@@ -383,4 +383,4 @@ class GoogLeNet(CNNs):
             self.auxil1_last = self.auxil(self.inception4a_concat, 128, 1024, 5, 1, 3, 1, 'auxil1')
             self.auxil2_last = self.auxil(self.inception4d_concat, 128, 1024, 5, 1, 3, 1, 'auxil2')
             self.last = tf.reduce_mean([self.last, 0.3 * self.auxil1_last, 0.3 * self.auxil2_last],
-                                       axis=0, keepdims=True)
+                                       axis=0)
