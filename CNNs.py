@@ -3,10 +3,12 @@ import tensorflow as tf
 
 # 定义一个各种CNN模型的父类，其中定义一些通用属性和方法
 class CNNs(object):
-    def __init__(self, keep_prob, regularizer=None, write_sum=False):
+    def __init__(self, keep_prob, regularizer=None, write_sum=False, 
+                 training=True):
         self.KEEP_PROB = keep_prob
         self.REGULARIZER = regularizer
         self.WRITE_LOG = write_sum
+        self.TRAINING = training
 
 
     # 逐个变量写具体日志
@@ -28,7 +30,7 @@ class CNNs(object):
 
     # 自定义卷积层
     def conv(self, base, filter_height, filter_width, num_filters,
-             stride_y, stride_x, scope, padding='SAME'):
+             stride_y, stride_x, scope, padding='SAME', batch_norm=False):
         with tf.name_scope(scope):
             num_channels = base.get_shape()[-1].value
                 
@@ -52,8 +54,13 @@ class CNNs(object):
         
             conved = tf.nn.conv2d(base, weights, [1, stride_y, stride_x, 1],
                                   padding=padding)
-            with_bias = tf.nn.bias_add(conved, biases)
-            relued = tf.nn.relu(with_bias, name='relu')
+            if batch_norm:
+                normed = tf.layers.batch_normalization(conved,
+                                                       training=self.TRAINING)
+                relued = tf.nn.relu(normed, name='relu')
+            else:
+                with_bias = tf.nn.bias_add(conved, biases)
+                relued = tf.nn.relu(with_bias, name='relu')
         
             return relued
 
@@ -88,7 +95,7 @@ class CNNs(object):
 
 
     # 自定义全连接层
-    def fc(self, base, out_nodes, scope, relu=True, reshape=False):
+    def fc(self, base, out_nodes, scope, relu=True, reshape=False, batch_norm=False):
         with tf.name_scope(scope):
             in_nodes = base.get_shape()[-1].value
             if len(base.get_shape()) != 2:
@@ -112,14 +119,19 @@ class CNNs(object):
                 tf.add_to_collection('losses', self.REGULARIZER(weights))
             if self.WRITE_LOG:
                 self.write_summaries(weights, biases)
-        
-            fced = tf.nn.xw_plus_b(base, weights, biases, name='fc')
-        
-            if not relu:
-                return fced
-    
-            relued = tf.nn.relu(fced, name='relu')
-
+            
+            if batch_norm:
+                matmuled = tf.matmul(base, weights, name='matmul')
+                normed = tf.layers.batch_normalization(matmuled,
+                                                       training=self.TRAINING)
+                relued = tf.nn.relu(normed, name='relu')
+            else:
+                fced = tf.nn.xw_plus_b(base, weights, biases, name='fc')
+                if not relu:
+                    return fced
+                
+                relued = tf.nn.relu(fced, name='relu')
+                    
             return relued
 
 
@@ -136,8 +148,20 @@ class CNNs(object):
     def concat(self, base, axis, scope):
         with tf.name_scope(scope):
             concated = tf.concat(base, axis=3, name='concat')
-
             return concated
+        
+    
+    # 自定义separable conv层
+    def sepa_conv(self, base, num_outputs, kernel_size,
+                  depth_multiplier, strides, scope, padding='SAME'):
+        with tf.name_scope(scope):
+            sepa_conved = tf.contrib.layers.separable_conv2d(base,
+                                                             num_outputs,
+                                                             [kernel_size, kernel_size],
+                                                             depth_multiplier=depth_multiplier,
+                                                             stride=strides)
+        
+            return sepa_conved
 
     
 # 定义AlexNet模型
@@ -278,7 +302,7 @@ class Vgg19(CNNs):
 #             self.softmax = tf.nn.softmax(self.fc3)    # 这一步放在损失函数时用tf.nn.softmax...
 
 
-# 定义GoogLeNet模型
+# 定义GoogLeNet(inception_v1)模型
 class GoogLeNet(CNNs):
     def __init__(self, x, num_classes, keep_prob, regularizer=None,
                  write_sum=False, auxil=None):
@@ -384,3 +408,98 @@ class GoogLeNet(CNNs):
             self.auxil2_last = self.auxil(self.inception4d_concat, 128, 1024, 5, 1, 3, 1, 'auxil2')
             self.last = tf.reduce_mean([self.last, 0.3 * self.auxil1_last, 0.3 * self.auxil2_last],
                                        axis=0)
+
+            
+# 定义inception_v2模型
+class Inception_v2(CNNs):
+    def __init__(self, x, num_classes, keep_prob, regularizer=None,
+                 write_sum=False, training=True):
+        super().__init__(keep_prob, regularizer, write_sum, training)
+        self.x = x
+        self.NUM_CLASSES = num_classes
+        self.create()
+        
+        
+    # inception module
+    def inception(self, base, N_1x1, N_3x3_reduce, N_3x3, N_d3x3_reduce, N_d3x3_1, N_d3x3_2, N_pool_proj, 
+                  k_1x1, k_3x3_reduce, k_3x3, k_d3x3_reduce, k_d3x3_1, k_d3x3_2, k_pool, k_pool_proj, 
+                  s_1x1, s_3x3_reduce, s_3x3, s_d3x3_reduce, s_d3x3_1, s_d3x3_2, s_pool, s_pool_proj, scope,
+                  max_pool=False, pass_through=False):
+        with tf.name_scope(scope):
+            if not pass_through:
+                inception_1x1 = self.conv(base, k_1x1, k_1x1, N_1x1, s_1x1, s_1x1, '1x1', 'SAME', True)
+            
+            inception_3x3_reduce = self.conv(base, k_3x3_reduce, k_3x3_reduce, N_3x3_reduce,
+                                             s_3x3_reduce, s_3x3_reduce, '3x3_reduce',  'SAME', True)
+            inception_3x3 = self.conv(inception_3x3_reduce, k_3x3, k_3x3, N_3x3,
+                                      s_3x3, s_3x3, '3x3', 'SAME', True)
+            
+            inception_d3x3_reduce = self.conv(base, k_d3x3_reduce, k_d3x3_reduce, N_d3x3_reduce,
+                                             s_d3x3_reduce, s_d3x3_reduce, 'd3x3_reduce', 'SAME', True)
+            inception_d3x3_1 = self.conv(inception_d3x3_reduce, k_d3x3_1, k_d3x3_1, N_d3x3_1,
+                                      s_d3x3_1, s_d3x3_1, 'd3x3_1', 'SAME', True)
+            inception_d3x3_2 = self.conv(inception_d3x3_1, k_d3x3_2, k_d3x3_2, N_d3x3_2,
+                                      s_d3x3_2, s_d3x3_2, 'd3x3_2', 'SAME', True)
+            
+            inception_pool = self.pool(base, k_pool, k_pool, s_pool, s_pool, 'pool', 'SAME', max_pool)
+            if pass_through:
+                inception_concat = self.concat([inception_3x3, inception_d3x3_2, inception_pool], 
+                                               3, 'concat')
+            else:
+                inception_pool_proj = self.conv(inception_pool, k_pool_proj, k_pool_proj, N_pool_proj,
+                                                s_pool_proj, s_pool_proj, 'pool_proj', 'SAME', True)
+                inception_concat = self.concat([inception_1x1, inception_3x3, 
+                                                inception_d3x3_2, inception_pool_proj], 
+                                               3, 'concat')
+            return inception_concat
+
+        
+    def create(self):
+        self.conv1 = self.sepa_conv(self.x, 64, 7, 8, 2, 'conv1', 'SAME')        
+        self.pool1 = self.pool(self.conv1, 3, 3, 2, 2, 'pool1', 'SAME')
+        self.lrn1 = self.lrn(self.pool1, 'lrn1', 2, 2.0, 1e-4, 0.75)
+
+        self.conv2_reduce = self.conv(self.lrn1, 1, 1, 64, 1, 1, 'conv2_reduce', 'VALID', True)
+        self.conv2 = self.conv(self.conv2_reduce, 3, 3, 192, 1, 1, 'conv2', 'SAME', True)
+        self.lrn2 = self.lrn(self.conv2, 'lrn2', 2, 2.0, 1e-4, 0.75)
+        self.pool2 = self.pool(self.lrn2, 3, 3, 2, 2, 'pool2', 'SAME')
+        
+        self.inception3a_concat = self.inception(self.pool2, 64, 64, 64, 64, 96, 96, 32, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1, 
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception3a')
+        self.inception3b_concat = self.inception(self.inception3a_concat, 64, 64, 96, 64, 96, 96, 64, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1,
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception3b')
+        self.inception3c_concat = self.inception(self.inception3b_concat, None, 128, 160, 64, 96, 96, None, 
+                                                 None, 1, 3, 1, 3, 3, 3, None,
+                                                 None, 1, 2, 1, 1, 2, 2, None, 'inception3c', True, True)
+        
+        self.inception4a_concat = self.inception(self.inception3c_concat, 224, 64, 96, 96, 128, 128, 128, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1, 
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception4a')
+        self.inception4b_concat = self.inception(self.inception4a_concat, 192, 96, 128, 96, 128, 128, 128, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1,
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception4b')
+        self.inception4c_concat = self.inception(self.inception4b_concat, 160, 128, 160, 128, 160, 160, 128, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1, 
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception4c')
+        self.inception4d_concat = self.inception(self.inception4c_concat, 96, 128, 192, 160, 192, 192, 128, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1,
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception4d')
+        self.inception4e_concat = self.inception(self.inception4d_concat, None, 128, 192, 192, 256, 256, None, 
+                                                 None, 1, 3, 1, 3, 3, 3, None,
+                                                 None, 1, 2, 1, 1, 2, 2, None, 'inception4e', True, True)
+        
+        self.inception5a_concat = self.inception(self.inception4e_concat, 352, 192, 320, 160, 224, 224, 128, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1, 
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception5a')
+        self.inception5b_concat = self.inception(self.inception5a_concat, 352, 192, 320, 192, 224, 224, 128, 
+                                                 1, 1, 3, 1, 3, 3, 3, 1,
+                                                 1, 1, 1, 1, 1, 1, 1, 1, 'inception5b', True)
+        
+        self.pool3 = self.pool(self.inception5b_concat, 7, 7, 1, 1, 'pool3', 'VALID', max_pool=False)
+
+        self.dropout1 = self.dropout(self.pool3, 'dropout')
+
+        self.last = self.fc(self.dropout1, self.NUM_CLASSES, 'fc', True, True, True)
+#        self.softmax = tf.nn.softmax(self.fc)    # 这一步放在损失函数时用tf.nn.softmax...（下同）
