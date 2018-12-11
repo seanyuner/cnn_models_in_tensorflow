@@ -4,10 +4,10 @@
 
 ### 模型：
 - AlexNet, 2012 ([paper](https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks))
-- GoogLeNet, 2014 ([paper](https://arxiv.org/abs/1409.4842))
-- VGG, 2014 ([paper](https://arxiv.org/abs/1409.1556))
-- Inception_v2, ([paper](https://arxiv.org/abs/1502.03167))
-- Inception_v3, ([paper](https://arxiv.org/abs/1512.00567))
+- GoogLeNet, 2014.09 ([paper](https://arxiv.org/abs/1409.4842))
+- Vgg, 2014.09 ([paper](https://arxiv.org/abs/1409.1556))
+- Inception_v2, 2015.02 ([paper](https://arxiv.org/abs/1502.03167))
+- Inception_v3, 2015.12 ([paper](https://arxiv.org/abs/1512.00567))
 
 ### 数据：
 数据原下载地址在[这里](http://download.tensorflow.org/example_images/flower_photos.tgz)，tgz文件大小约218M，包含5类图片大小不确定的3通道花朵图片，各类数目不等，共计3670张。但由于本人笔记本限制，实验时只取了部分图片，即根目录下datasets中文件，5类各取400张，共2000张。实验时取测试集比例为25%，各100张。
