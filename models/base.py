@@ -30,7 +30,8 @@ class CNNs(object):
 
     # 自定义卷积层
     def conv(self, base, filter_height, filter_width, num_filters,
-             stride_y, stride_x, scope, padding='SAME', batch_norm=False):
+             stride_y, stride_x, scope, padding='SAME', batch_norm=False,
+             relu=True):
         with tf.name_scope(scope):
             num_channels = base.get_shape()[-1].value
                 
@@ -57,10 +58,16 @@ class CNNs(object):
             if batch_norm:
                 normed = tf.layers.batch_normalization(conved,
                                                        training=self.TRAINING)
-                relued = tf.nn.relu(normed, name='relu')
+                if not relu:
+                    return normed
+                else:
+                    relued = tf.nn.relu(normed, name='relu')
             else:
                 with_bias = tf.nn.bias_add(conved, biases)
-                relued = tf.nn.relu(with_bias, name='relu')
+                if not relu:
+                    return with_bias
+                else:
+                    relued = tf.nn.relu(with_bias, name='relu')
         
             return relued
 
