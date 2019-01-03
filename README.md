@@ -8,12 +8,14 @@
 - Vgg, 2014.09 ([paper](https://arxiv.org/abs/1409.1556))
 - Inception_v2, 2015.02 ([paper](https://arxiv.org/abs/1502.03167))
 - Inception_v3, 2015.12 ([paper](https://arxiv.org/abs/1512.00567))
+- ResNet, 2015.12 ([paper](https://arxiv.org/abs/1512.03385))
 
 ### 数据：
 数据原下载地址在[这里](http://download.tensorflow.org/example_images/flower_photos.tgz)，tgz文件大小约218M，包含5类图片大小不确定的3通道花朵图片，各类数目不等，共计3670张。但由于本人笔记本限制，实验时只取了部分图片，即根目录下datasets中文件，5类各取400张，共2000张。实验时取测试集比例为25%，各100张。
 
 ### 文件说明：
 - `datasets`：数据集文件夹；
+- `graphs`：模型在tensorboard中的graph，部分graph由于尺寸限制只截取了代表部分;
 - `images`：一些供ipynb文件调用的可视化或者其他辅助图片文件夹；
 - `models`：搭建模型文件夹；
 - `*.ipynb`：实验记录文档，一些文字记录、图片说明，包括迭代记录、模型说明和对比等；
